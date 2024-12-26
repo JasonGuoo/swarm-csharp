@@ -12,28 +12,22 @@ using Swarm.CSharp.LLM.Helpers;
 
 namespace Swarm.CSharp.LLM.Providers
 {
-    public class OpenAIClient : ILLMClient
+    public class ChatGLMClient : ILLMClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<OpenAIClient>? _logger;
+        private readonly ILogger<ChatGLMClient>? _logger;
         private readonly string _defaultModel;
         private readonly JsonSerializerOptions _jsonOptions;
-        private readonly double? _defaultTemperature;
-        private readonly int? _defaultMaxTokens;
         private readonly string _baseUrl;
 
-        public OpenAIClient(
+        public ChatGLMClient(
             string apiKey,
-            string model = "gpt-4o-mini",
-            string baseUrl = "https://api.openai.com/v1",
-            string? organizationId = null,
-            double? temperature = null,
-            int? maxTokens = null,
+            string model = "glm-4-flash",
+            string baseUrl = "https://bigmodel.cn/api/v1",
             HttpClient? httpClient = null,
-            ILogger<OpenAIClient>? logger = null)
+            ILogger<ChatGLMClient>? logger = null)
         {
             ArgumentException.ThrowIfNullOrEmpty(apiKey);
-            _logger?.LogInformation("Initializing OpenAI client with API key: {ApiKey}", Utils.MaskApiKey(apiKey));
 
             _logger = logger;
             _defaultModel = model;
@@ -41,19 +35,13 @@ namespace Swarm.CSharp.LLM.Providers
             _httpClient = httpClient ?? new HttpClient();
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            if (!string.IsNullOrEmpty(organizationId))
-            {
-                _httpClient.DefaultRequestHeaders.Add("OpenAI-Organization", organizationId);
-            }
-
             _jsonOptions = new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                 DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
             };
 
-            _defaultTemperature = temperature;
-            _defaultMaxTokens = maxTokens;
+            _logger?.LogInformation("Initializing ChatGLM client with API key: {ApiKey}", Utils.MaskApiKey(apiKey));
         }
 
         public async Task<ChatResponse> ChatAsync(ChatRequest request)
@@ -65,36 +53,28 @@ namespace Swarm.CSharp.LLM.Providers
                 _logger?.LogInformation("Base URL: {BaseUrl}", _baseUrl);
                 _logger?.LogInformation("Default Model: {Model}", _defaultModel);
 
-                // Log request parameters
+                // Set default model if not provided
                 if (string.IsNullOrEmpty(request.Model))
                 {
                     request.Model = _defaultModel;
                     _logger?.LogInformation("Using default model: {Model}", _defaultModel);
                 }
-                if (!request.Temperature.HasValue)
-                {
-                    request.Temperature = _defaultTemperature;
-                    _logger?.LogInformation("Using default temperature: {Temperature}", _defaultTemperature);
-                }
-                if (!request.MaxTokens.HasValue)
-                {
-                    request.MaxTokens = _defaultMaxTokens;
-                    _logger?.LogInformation("Using default max tokens: {MaxTokens}", _defaultMaxTokens);
-                }
 
-                var requestJson = JsonSerializer.Serialize(request, _jsonOptions);
+                // Convert OpenAI format to ChatGLM format
+                var chatGLMRequest = new
+                {
+                    model = request.Model,
+                    messages = request.Messages,
+                    stream = request.Stream,
+                    temperature = request.Temperature ?? 0.7,
+                    tools = request.Tools,
+                    tool_choice = request.ToolChoice
+                };
+
+                var requestJson = JsonSerializer.Serialize(chatGLMRequest, _jsonOptions);
                 _logger?.LogInformation("Request Body: {Request}", requestJson);
 
-                // Log all request headers
-                _logger?.LogInformation("Default Headers:");
-                foreach (var header in _httpClient.DefaultRequestHeaders)
-                {
-                    _logger?.LogInformation("  {Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-
-                // Create complete URL
                 var completeUrl = $"{_baseUrl}/chat/completions";
-
                 var httpRequest = new HttpRequestMessage(HttpMethod.Post, completeUrl)
                 {
                     Content = new StringContent(requestJson, Encoding.UTF8, "application/json"),
@@ -132,14 +112,14 @@ namespace Swarm.CSharp.LLM.Providers
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
+                    throw new HttpRequestException($"ChatGLM API returned {response.StatusCode}: {responseContent}");
                 }
 
                 return JsonSerializer.Deserialize<ChatResponse>(responseContent, _jsonOptions);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error in OpenAI chat completion");
+                _logger?.LogError(ex, "Error in ChatGLM chat completion");
                 throw;
             }
         }
@@ -154,7 +134,8 @@ namespace Swarm.CSharp.LLM.Providers
                     request.Model = _defaultModel;
                 }
 
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/chat/completions")
+                var completeUrl = $"{_baseUrl}/chat/completions";
+                var httpRequest = new HttpRequestMessage(HttpMethod.Post, completeUrl)
                 {
                     Content = new StringContent(
                         JsonSerializer.Serialize(request, _jsonOptions),
@@ -173,7 +154,7 @@ namespace Swarm.CSharp.LLM.Providers
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error in OpenAI chat stream");
+                _logger?.LogError(ex, "Error in ChatGLM chat stream");
                 throw;
             }
         }
