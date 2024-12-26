@@ -1,5 +1,4 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -7,52 +6,24 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E7C123E8-B8D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp", "src\Swarm.CSharp\Swarm.CSharp.csproj", "{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0D41E43D-1C02-4583-B15F-8F359919457C}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp.Tests", "tests\Swarm.CSharp.Tests\Swarm.CSharp.Tests.csproj", "{BC7172C9-953F-4F35-9085-BC90948B1C7C}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{B50ADDBD-56B8-4BBD-88C0-D62B0F54F587}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "weather", "weather", "{ACB515EC-CCCB-44CB-88A5-4F613DA6E54E}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp.Examples.Weather", "examples\weather\Swarm.CSharp.Examples.Weather\Swarm.CSharp.Examples.Weather.csproj", "{C615D86D-54D3-4595-A817-60E9AE4FF9F8}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "triage", "triage", "{C9EB49B7-4CC4-44F3-973E-08E122036598}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp.Examples.Triage", "examples\triage\Swarm.CSharp.Examples.Triage\Swarm.CSharp.Examples.Triage.csproj", "{B9DAB61B-E0A2-4501-A476-874CB61E9F6E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp.Tests", "src\Swarm.CSharp.Tests\Swarm.CSharp.Tests.csproj", "{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
-	EndGlobalSection
-	GlobalSection(SolutionProperties) = preSolution
-		HideSolutionNode = FALSE
+		 Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10}.Release|Any CPU.Build.0 = Release|Any CPU
-		{BC7172C9-953F-4F35-9085-BC90948B1C7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BC7172C9-953F-4F35-9085-BC90948B1C7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{BC7172C9-953F-4F35-9085-BC90948B1C7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{BC7172C9-953F-4F35-9085-BC90948B1C7C}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C615D86D-54D3-4595-A817-60E9AE4FF9F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C615D86D-54D3-4595-A817-60E9AE4FF9F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C615D86D-54D3-4595-A817-60E9AE4FF9F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C615D86D-54D3-4595-A817-60E9AE4FF9F8}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B9DAB61B-E0A2-4501-A476-874CB61E9F6E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B9DAB61B-E0A2-4501-A476-874CB61E9F6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B9DAB61B-E0A2-4501-A476-874CB61E9F6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B9DAB61B-E0A2-4501-A476-874CB61E9F6E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10} = {E7C123E8-B8DD-4D1A-8F2E-299B7C13426C}
-		{BC7172C9-953F-4F35-9085-BC90948B1C7C} = {0D41E43D-1C02-4583-B15F-8F359919457C}
-		{ACB515EC-CCCB-44CB-88A5-4F613DA6E54E} = {B50ADDBD-56B8-4BBD-88C0-D62B0F54F587}
-		{C615D86D-54D3-4595-A817-60E9AE4FF9F8} = {ACB515EC-CCCB-44CB-88A5-4F613DA6E54E}
-		{C9EB49B7-4CC4-44F3-973E-08E122036598} = {B50ADDBD-56B8-4BBD-88C0-D62B0F54F587}
-		{B9DAB61B-E0A2-4501-A476-874CB61E9F6E} = {C9EB49B7-4CC4-44F3-973E-08E122036598}
 	EndGlobalSection
 EndGlobal
