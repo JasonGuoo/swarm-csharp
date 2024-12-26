@@ -188,7 +188,7 @@ namespace Swarm.CSharp.Tests.LLM.Providers
             Assert.NotNull(capturedRequest);
             var content = await capturedRequest.Content!.ReadAsStringAsync();
             var requestObj = JsonSerializer.Deserialize<ChatRequest>(content, _jsonOptions);
-            Assert.Equal("gpt-4o-mini", requestObj?.Model);
+            Assert.Equal(EnvLoader.GetEnvVar("OPENAI_MODEL"), requestObj?.Model);
         }
     }
 }
