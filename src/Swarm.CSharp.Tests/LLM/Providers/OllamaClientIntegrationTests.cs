@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Swarm.CSharp.LLM.Models;
 using Swarm.CSharp.LLM.Providers;
-using Swarm.CSharp.Tests.Helpers;
+using Swarm.CSharp.Utils;
 using Xunit;
 using Xunit.Abstractions;
 

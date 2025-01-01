@@ -11,7 +11,7 @@ using Moq.Protected;
 using Swarm.CSharp.LLM.Models;
 using Swarm.CSharp.LLM.Providers;
 using Xunit;
-using Swarm.CSharp.Tests.Helpers;
+using Swarm.CSharp.Utils;
 
 namespace Swarm.CSharp.Tests.LLM.Providers
 {

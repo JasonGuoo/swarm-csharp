@@ -9,7 +9,7 @@ using Moq.Protected;
 using Swarm.CSharp.LLM.Models;
 using Swarm.CSharp.LLM.Providers;
 using Xunit;
-using Swarm.CSharp.Tests.Helpers;
+using Swarm.CSharp.Utils;
 using System.Text.Json.Serialization;
 
 namespace Swarm.CSharp.Tests.LLM.Providers

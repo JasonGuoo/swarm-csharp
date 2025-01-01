@@ -1,8 +1,7 @@
 using System;
 using System.IO;
-using Swarm.CSharp.Utils;
 
-namespace Swarm.CSharp.Tests.Helpers
+namespace Swarm.CSharp.Utils
 {
     public static class EnvLoader
     {

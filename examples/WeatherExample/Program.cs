@@ -6,6 +6,7 @@ using Swarm.CSharp.Core;
 using Swarm.CSharp.LLM;
 using Swarm.CSharp.LLM.Models;
 using Swarm.CSharp.LLM.Providers;
+using Swarm.CSharp.Utils;
 
 namespace WeatherExample;
 
@@ -15,13 +16,15 @@ public class Program
     {
         try
         {
+            // Load environment variables
+            EnvLoader.Load();
+
             var host = CreateHostBuilder(args).Build();
             await RunExampleAsync(host.Services);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Fatal error: {ex.Message}");
-            Console.WriteLine(ex.StackTrace);
+            Logger.LogError(ex, "Fatal error occurred");
             Environment.Exit(1);
         }
     }
@@ -38,14 +41,15 @@ public class Program
             })
             .ConfigureServices((hostContext, services) =>
             {
-                // Configure LLM client
+                // Configure LLM client using environment variables
                 services.AddSingleton<ILLMClient>(sp =>
                 {
-                    var config = sp.GetRequiredService<IConfiguration>();
-                    var apiKey = config["OpenAI:ApiKey"] ?? 
-                        throw new InvalidOperationException("OpenAI API key not configured");
-                    
-                    return new OpenAIClient(apiKey);
+                    var apiKey = EnvLoader.GetEnvVar("OPENAI_API_KEY") ??
+                        throw new InvalidOperationException("OpenAI API key not found in environment variables");
+                    var model = EnvLoader.GetEnvVar("OPENAI_MODEL") ?? "gpt-3.5-turbo";
+                    var base_url = EnvLoader.GetEnvVar("OPENAI_BASE_URL") ?? "https://api.openai.com/v1";
+
+                    return new OpenAIClient(apiKey, model, base_url);
                 });
 
                 // Add SwarmCore logger
@@ -65,7 +69,6 @@ public class Program
 
     private static async Task RunExampleAsync(IServiceProvider services)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
         var llmClient = services.GetRequiredService<ILLMClient>();
         var swarmLogger = services.GetRequiredService<ILogger<SwarmCore>>();
         var swarm = new SwarmCore(llmClient, swarmLogger);
@@ -81,7 +84,7 @@ public class Program
         try
         {
             // Test Scenario 1: Basic weather query
-            logger.LogInformation("Test Scenario 1: Basic weather query");
+            Logger.LogInformation("Test Scenario 1: Basic weather query");
             var weatherQuery = new Message
             {
                 Role = "user",
@@ -89,17 +92,17 @@ public class Program
             };
 
             var response1 = await swarm.RunAsync(
-                agent,                     // The agent to use
-                new List<Message> { weatherQuery }, // List of messages
-                context,                   // Context map
-                modelOverride: null,        // Model override (optional)
-                stream: false,              // Streaming mode
-                debug: true,                // Debug mode
-                maxTurns: 10);             // Max conversation turns
-            logger.LogInformation("Response of Scenario 1: {Response}", response1.History[^1].Content);
+                agent,
+                new List<Message> { weatherQuery },
+                context,
+                modelOverride: null,
+                stream: false,
+                debug: true,
+                maxTurns: 10);
+            Logger.LogInformation($"Response of Scenario 1: {response1.History[^1].Content}");
 
             // Test Scenario 2: Weather + Email
-            logger.LogInformation("\nTest Scenario 2: Weather + Email combination");
+            Logger.LogInformation("\nTest Scenario 2: Weather + Email combination");
             var emailQuery = new Message
             {
                 Role = "user",
@@ -114,10 +117,10 @@ public class Program
                 stream: false,
                 debug: true,
                 maxTurns: 10);
-            logger.LogInformation("Response of Scenario 2: {Response}", response2.History[^1].Content);
+            Logger.LogInformation($"Response of Scenario 2: {response2.History[^1].Content}");
 
             // Test Scenario 3: Streaming example
-            logger.LogInformation("\nTest Scenario 3: Streaming weather updates");
+            Logger.LogInformation("\nTest Scenario 3: Streaming weather updates");
             var streamQuery = new Message
             {
                 Role = "user",
@@ -132,10 +135,10 @@ public class Program
                 stream: true,
                 debug: true,
                 maxTurns: 10);
-            logger.LogInformation("Response of Scenario 3: {Response}", response3.History[^1].Content);
+            Logger.LogInformation($"Response of Scenario 3: {response3.History[^1].Content}");
 
             // Test Scenario 4: Error handling
-            logger.LogInformation("\nTest Scenario 4: Error handling");
+            Logger.LogInformation("\nTest Scenario 4: Error handling");
             var errorQuery = new Message
             {
                 Role = "user",
@@ -155,19 +158,19 @@ public class Program
             }
             catch (Exception e)
             {
-                logger.LogError("Expected error occurred: {Message}", e.Message);
+                Logger.LogError($"Expected error occurred: {e.Message}");
             }
 
             // Print final context state
-            logger.LogInformation("\nFinal context state:");
+            Logger.LogInformation("\nFinal context state:");
             foreach (var (key, value) in context)
             {
-                logger.LogInformation("{Key}: {Value}", key, value);
+                Logger.LogInformation($"{key}: {value}");
             }
         }
         catch (Exception e)
         {
-            logger.LogError(e, "Error running weather example");
+            Logger.LogError($"Error running weather example: {e.Message}");
             throw;
         }
     }
