@@ -5,8 +5,10 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Swarm.CSharp.Utils;
+using Swarm.CSharp.LLM.Helpers;
 using Swarm.CSharp.LLM.Models;
+using Swarm.CSharp.Utils;
+
 
 namespace Swarm.CSharp.LLM.Providers;
 
@@ -30,11 +32,19 @@ public class OpenAIClient : ILLMClient
     {
         try
         {
+            // Set default values if not specified
+            request.Model ??= Model;
+            request.Stream ??= false;
+            request.Temperature ??= 0.7f;
+            request.MaxTokens ??= 8192;
+
             var json = JsonSerializer.Serialize(request);
             Logger.LogDebug($"OpenAI Request: {json}");
 
             var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync("/v1/chat/completions", content);
+            var fullUrl = Utilities.CombineUrls(_httpClient.BaseAddress.ToString(), "chat/completions");
+            Logger.LogDebug($"Full URL: {fullUrl}");
+            var response = await _httpClient.PostAsync(fullUrl, content);
             response.EnsureSuccessStatusCode();
 
             var responseContent = await response.Content.ReadAsStringAsync();
