@@ -39,7 +39,7 @@ namespace Swarm.CSharp.Tests.LLM.Providers
             });
             var logger = loggerFactory.CreateLogger<OpenAIClient>();
 
-            _client = new OpenAIClient(apiKey, _model, baseUrl, logger: logger);
+            _client = new OpenAIClient(apiKey, _model, baseUrl);
         }
 
         [Fact]
@@ -290,7 +290,7 @@ namespace Swarm.CSharp.Tests.LLM.Providers
                     new() { Role = "user", Content = "Say hi" }
                 },
                 Model = "openai/gpt-4o-mini",
-                Temperature = 0.7,
+                Temperature = (float?)0.7,
                 MaxTokens = 150,
                 Tools = new List<Tool>()
             };

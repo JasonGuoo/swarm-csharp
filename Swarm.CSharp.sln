@@ -8,10 +8,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp", "src\Swarm.C
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Swarm.CSharp.Tests", "src\Swarm.CSharp.Tests\Swarm.CSharp.Tests.csproj", "{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{54E7E3A7-FE86-42FE-8F49-B5610F2D18F0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WeatherExample", "examples\WeatherExample\WeatherExample.csproj", "{377D33E2-4E02-4B60-AD50-8BF9F97A8730}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
-		 Release|Any CPU = Release|Any CPU
+		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -22,8 +26,13 @@ Global
 		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1BE8626D-45AD-465D-B4AD-17F7CAEDEF11}.Release|Any CPU.Build.0 = Release|Any CPU
+		{377D33E2-4E02-4B60-AD50-8BF9F97A8730}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{377D33E2-4E02-4B60-AD50-8BF9F97A8730}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{377D33E2-4E02-4B60-AD50-8BF9F97A8730}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{377D33E2-4E02-4B60-AD50-8BF9F97A8730}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{0BE8626D-45AD-465D-B4AD-17F7CAEDEF10} = {E7C123E8-B8DD-4D1A-8F2E-299B7C13426C}
+		{377D33E2-4E02-4B60-AD50-8BF9F97A8730} = {54E7E3A7-FE86-42FE-8F49-B5610F2D18F0}
 	EndGlobalSection
 EndGlobal

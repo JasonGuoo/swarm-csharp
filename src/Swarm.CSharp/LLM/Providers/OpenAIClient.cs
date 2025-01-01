@@ -1,181 +1,131 @@
 using System;
-using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
+using Swarm.CSharp.Utils;
 using Swarm.CSharp.LLM.Models;
-using Swarm.CSharp.LLM.Helpers;
 
-namespace Swarm.CSharp.LLM.Providers
+namespace Swarm.CSharp.LLM.Providers;
+
+public class OpenAIClient : ILLMClient
 {
-    public class OpenAIClient : ILLMClient
+    private readonly HttpClient _httpClient;
+    private readonly string _apiKey;
+    private const string DefaultBaseUrl = "https://api.openai.com/v1";
+
+    public string Model { get; set; }
+
+    public OpenAIClient(string apiKey, string model = "gpt-3.5-turbo", string? baseUrl = null)
     {
-        private readonly HttpClient _httpClient;
-        private readonly ILogger<OpenAIClient>? _logger;
-        private readonly string _defaultModel;
-        private readonly JsonSerializerOptions _jsonOptions;
-        private readonly double? _defaultTemperature;
-        private readonly int? _defaultMaxTokens;
-        private readonly string _baseUrl;
+        Model = model;
+        _apiKey = apiKey;
+        _httpClient = new HttpClient { BaseAddress = new Uri(baseUrl ?? DefaultBaseUrl) };
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+    }
 
-        public OpenAIClient(
-            string apiKey,
-            string model = "gpt-4o-mini",
-            string baseUrl = "https://api.openai.com/v1",
-            string? organizationId = null,
-            double? temperature = null,
-            int? maxTokens = null,
-            HttpClient? httpClient = null,
-            ILogger<OpenAIClient>? logger = null)
+    public async Task<ChatResponse> ChatAsync(ChatRequest request)
+    {
+        try
         {
-            ArgumentException.ThrowIfNullOrEmpty(apiKey);
-            _logger?.LogInformation("Initializing OpenAI client with API key: {ApiKey}", Utils.MaskApiKey(apiKey));
+            var json = JsonSerializer.Serialize(request);
+            Logger.LogDebug($"OpenAI Request: {json}");
 
-            _logger = logger;
-            _defaultModel = model;
-            _baseUrl = baseUrl.TrimEnd('/');
-            _httpClient = httpClient ?? new HttpClient();
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync("/v1/chat/completions", content);
+            response.EnsureSuccessStatusCode();
 
-            if (!string.IsNullOrEmpty(organizationId))
+            var responseContent = await response.Content.ReadAsStringAsync();
+            Logger.LogDebug($"OpenAI Response: {responseContent}");
+
+            return JsonSerializer.Deserialize<ChatResponse>(responseContent);
+        }
+        catch (Exception e)
+        {
+            Logger.LogError(e, "Error calling OpenAI API");
+            throw;
+        }
+    }
+
+    public async IAsyncEnumerable<ChatResponse> StreamAsync(ChatRequest request)
+    {
+        request.Stream = true;
+        var json = JsonSerializer.Serialize(request);
+        Logger.LogDebug($"OpenAI Stream Request: {json}");
+
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        HttpResponseMessage response = null;
+        Stream stream = null;
+        StreamReader reader = null;
+
+        try
+        {
+            response = await _httpClient.PostAsync("/v1/chat/completions", content);
+            response.EnsureSuccessStatusCode();
+            stream = await response.Content.ReadAsStreamAsync();
+            reader = new StreamReader(stream);
+            Logger.LogDebug("OpenAI Stream initialized successfully");
+        }
+        catch (Exception e)
+        {
+            response?.Dispose();
+            stream?.Dispose();
+            reader?.Dispose();
+            Logger.LogError(e, "Error initializing stream from OpenAI API");
+            throw;
+        }
+
+        using (response)
+        using (stream)
+        using (reader)
+        {
+            while (!reader.EndOfStream)
             {
-                _httpClient.DefaultRequestHeaders.Add("OpenAI-Organization", organizationId);
+                string line = null;
+                ChatResponse chunk = null;
+
+                try
+                {
+                    line = await reader.ReadLineAsync();
+                    if (string.IsNullOrEmpty(line) || line == "data: [DONE]") continue;
+
+                    if (line.StartsWith("data: "))
+                    {
+                        line = line.Substring(6);
+                        Logger.LogDebug($"OpenAI Stream chunk received: {line}");
+                        chunk = JsonSerializer.Deserialize<ChatResponse>(line);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.LogError(e, "Error processing stream from OpenAI API");
+                    throw;
+                }
+
+                if (chunk != null)
+                {
+                    yield return chunk;
+                }
             }
+        }
+    }
 
-            _jsonOptions = new JsonSerializerOptions
+    public async Task ValidateConnectionAsync()
+    {
+        try
+        {
+            var request = new ChatRequest
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                Model = Model,
+                Messages = new List<Message> { new Message { Role = "user", Content = "test" } }
             };
-
-            _defaultTemperature = temperature;
-            _defaultMaxTokens = maxTokens;
+            await ChatAsync(request);
         }
-
-        public async Task<ChatResponse> ChatAsync(ChatRequest request)
+        catch (Exception e)
         {
-            try
-            {
-                // Log initial state
-                _logger?.LogInformation("=== Request Details ===");
-                _logger?.LogInformation("Base URL: {BaseUrl}", _baseUrl);
-                _logger?.LogInformation("Default Model: {Model}", _defaultModel);
-
-                // Log request parameters
-                if (string.IsNullOrEmpty(request.Model))
-                {
-                    request.Model = _defaultModel;
-                    _logger?.LogInformation("Using default model: {Model}", _defaultModel);
-                }
-                if (!request.Temperature.HasValue)
-                {
-                    request.Temperature = _defaultTemperature;
-                    _logger?.LogInformation("Using default temperature: {Temperature}", _defaultTemperature);
-                }
-                if (!request.MaxTokens.HasValue)
-                {
-                    request.MaxTokens = _defaultMaxTokens;
-                    _logger?.LogInformation("Using default max tokens: {MaxTokens}", _defaultMaxTokens);
-                }
-
-                var requestJson = JsonSerializer.Serialize(request, _jsonOptions);
-                _logger?.LogInformation("Request Body: {Request}", requestJson);
-
-                // Log all request headers
-                _logger?.LogInformation("Default Headers:");
-                foreach (var header in _httpClient.DefaultRequestHeaders)
-                {
-                    _logger?.LogInformation("  {Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-
-                // Create complete URL
-                var completeUrl = $"{_baseUrl}/chat/completions";
-
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, completeUrl)
-                {
-                    Content = new StringContent(requestJson, Encoding.UTF8, "application/json"),
-                    Headers =
-                    {
-                        Accept = { new MediaTypeWithQualityHeaderValue("application/json") }
-                    }
-                };
-
-                // Log final request details
-                _logger?.LogInformation("=== Final Request ===");
-                _logger?.LogInformation("Method: {Method}", httpRequest.Method);
-                _logger?.LogInformation("Complete URL: {Url}", completeUrl);
-                _logger?.LogInformation("Content Headers:");
-                foreach (var header in httpRequest.Content!.Headers)
-                {
-                    _logger?.LogInformation("  {Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-                _logger?.LogInformation("Request Headers:");
-                foreach (var header in httpRequest.Headers)
-                {
-                    _logger?.LogInformation("  {Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-
-                var response = await _httpClient.SendAsync(httpRequest);
-                var responseContent = await response.Content.ReadAsStringAsync();
-
-                _logger?.LogInformation("Response Status: {Status}", response.StatusCode);
-                _logger?.LogInformation("Response Headers:");
-                foreach (var header in response.Headers)
-                {
-                    _logger?.LogInformation("{Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-                _logger?.LogInformation("Response Content: {Response}", responseContent);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new HttpRequestException($"OpenAI API returned {response.StatusCode}: {responseContent}");
-                }
-
-                return JsonSerializer.Deserialize<ChatResponse>(responseContent, _jsonOptions);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error in OpenAI chat completion");
-                throw;
-            }
-        }
-
-        public async Task<Stream> ChatStreamAsync(ChatRequest request)
-        {
-            try
-            {
-                request.Stream = true;
-                if (string.IsNullOrEmpty(request.Model))
-                {
-                    request.Model = _defaultModel;
-                }
-
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/chat/completions")
-                {
-                    Content = new StringContent(
-                        JsonSerializer.Serialize(request, _jsonOptions),
-                        Encoding.UTF8,
-                        "application/json"),
-                    Headers =
-                    {
-                        Accept = { new MediaTypeWithQualityHeaderValue("application/json") }
-                    }
-                };
-
-                var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-
-                return await response.Content.ReadAsStreamAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error in OpenAI chat stream");
-                throw;
-            }
+            throw new Exception("Failed to validate OpenAI connection", e);
         }
     }
 }

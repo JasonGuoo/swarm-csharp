@@ -1,161 +1,128 @@
 using System;
-using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Microsoft.Extensions.Logging;
+using Swarm.CSharp.Utils;
 using Swarm.CSharp.LLM.Models;
-using Swarm.CSharp.LLM.Helpers;
 
 namespace Swarm.CSharp.LLM.Providers
 {
     public class ChatGLMClient : ILLMClient
     {
         private readonly HttpClient _httpClient;
-        private readonly ILogger<ChatGLMClient>? _logger;
-        private readonly string _defaultModel;
-        private readonly JsonSerializerOptions _jsonOptions;
-        private readonly string _baseUrl;
+        private readonly string _apiKey;
+        private const string DefaultEndpoint = "https://open.bigmodel.cn/api/paas/v3";
 
-        public ChatGLMClient(
-            string apiKey,
-            string model = "glm-4-flash",
-            string baseUrl = "https://bigmodel.cn/api/v1",
-            HttpClient? httpClient = null,
-            ILogger<ChatGLMClient>? logger = null)
+        public string Model { get; set; }
+
+        public ChatGLMClient(string apiKey, string model = "glm-4-flash", string endpoint = DefaultEndpoint)
         {
-            ArgumentException.ThrowIfNullOrEmpty(apiKey);
-
-            _logger = logger;
-            _defaultModel = model;
-            _baseUrl = baseUrl.TrimEnd('/');
-            _httpClient = httpClient ?? new HttpClient();
+            Model = model;
+            _apiKey = apiKey;
+            _httpClient = new HttpClient { BaseAddress = new Uri(endpoint) };
             _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
-            _jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-            };
-
-            _logger?.LogInformation("Initializing ChatGLM client with API key: {ApiKey}", Utils.MaskApiKey(apiKey));
         }
 
         public async Task<ChatResponse> ChatAsync(ChatRequest request)
         {
             try
             {
-                // Log initial state
-                _logger?.LogInformation("=== Request Details ===");
-                _logger?.LogInformation("Base URL: {BaseUrl}", _baseUrl);
-                _logger?.LogInformation("Default Model: {Model}", _defaultModel);
+                var json = JsonSerializer.Serialize(request);
+                Logger.LogDebug($"ChatGLM Request: {json}");
 
-                // Set default model if not provided
-                if (string.IsNullOrEmpty(request.Model))
-                {
-                    request.Model = _defaultModel;
-                    _logger?.LogInformation("Using default model: {Model}", _defaultModel);
-                }
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync("/chat", content);
+                response.EnsureSuccessStatusCode();
 
-                // Convert OpenAI format to ChatGLM format
-                var chatGLMRequest = new
-                {
-                    model = request.Model,
-                    messages = request.Messages,
-                    stream = request.Stream,
-                    temperature = request.Temperature ?? 0.7,
-                    tools = request.Tools,
-                    tool_choice = request.ToolChoice
-                };
-
-                var requestJson = JsonSerializer.Serialize(chatGLMRequest, _jsonOptions);
-                _logger?.LogInformation("Request Body: {Request}", requestJson);
-
-                var completeUrl = $"{_baseUrl}/chat/completions";
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, completeUrl)
-                {
-                    Content = new StringContent(requestJson, Encoding.UTF8, "application/json"),
-                    Headers =
-                    {
-                        Accept = { new MediaTypeWithQualityHeaderValue("application/json") }
-                    }
-                };
-
-                // Log final request details
-                _logger?.LogInformation("=== Final Request ===");
-                _logger?.LogInformation("Method: {Method}", httpRequest.Method);
-                _logger?.LogInformation("Complete URL: {Url}", completeUrl);
-                _logger?.LogInformation("Content Headers:");
-                foreach (var header in httpRequest.Content!.Headers)
-                {
-                    _logger?.LogInformation("  {Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-                _logger?.LogInformation("Request Headers:");
-                foreach (var header in httpRequest.Headers)
-                {
-                    _logger?.LogInformation("  {Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-
-                var response = await _httpClient.SendAsync(httpRequest);
                 var responseContent = await response.Content.ReadAsStringAsync();
+                Logger.LogDebug($"ChatGLM Response: {responseContent}");
 
-                _logger?.LogInformation("Response Status: {Status}", response.StatusCode);
-                _logger?.LogInformation("Response Headers:");
-                foreach (var header in response.Headers)
-                {
-                    _logger?.LogInformation("{Key}: {Value}", header.Key, string.Join(", ", header.Value));
-                }
-                _logger?.LogInformation("Response Content: {Response}", responseContent);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new HttpRequestException($"ChatGLM API returned {response.StatusCode}: {responseContent}");
-                }
-
-                return JsonSerializer.Deserialize<ChatResponse>(responseContent, _jsonOptions);
+                return JsonSerializer.Deserialize<ChatResponse>(responseContent);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                _logger?.LogError(ex, "Error in ChatGLM chat completion");
+                Logger.LogError(e, "Error calling ChatGLM API");
                 throw;
             }
         }
 
-        public async Task<Stream> ChatStreamAsync(ChatRequest request)
+        public async IAsyncEnumerable<ChatResponse> StreamAsync(ChatRequest request)
+        {
+            request.Stream = true;
+            var json = JsonSerializer.Serialize(request);
+            Logger.LogDebug($"ChatGLM Stream Request: {json}");
+
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            HttpResponseMessage response = null;
+            Stream stream = null;
+            StreamReader reader = null;
+
+            try
+            {
+                response = await _httpClient.PostAsync("/chat/stream", content);
+                response.EnsureSuccessStatusCode();
+                stream = await response.Content.ReadAsStreamAsync();
+                reader = new StreamReader(stream);
+                Logger.LogDebug("ChatGLM Stream initialized successfully");
+            }
+            catch (Exception e)
+            {
+                response?.Dispose();
+                stream?.Dispose();
+                reader?.Dispose();
+                Logger.LogError(e, "Error initializing stream from ChatGLM API");
+                throw;
+            }
+
+            using (response)
+            using (stream)
+            using (reader)
+            {
+                while (!reader.EndOfStream)
+                {
+                    string line = null;
+                    ChatResponse chunk = null;
+
+                    try
+                    {
+                        line = await reader.ReadLineAsync();
+                        if (string.IsNullOrEmpty(line)) continue;
+
+                        Logger.LogDebug($"ChatGLM Stream chunk received: {line}");
+                        chunk = JsonSerializer.Deserialize<ChatResponse>(line);
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.LogError(e, "Error processing stream from ChatGLM API");
+                        throw;
+                    }
+
+                    if (chunk != null)
+                    {
+                        yield return chunk;
+                    }
+                }
+            }
+        }
+
+        public async Task ValidateConnectionAsync()
         {
             try
             {
-                request.Stream = true;
-                if (string.IsNullOrEmpty(request.Model))
+                var request = new ChatRequest
                 {
-                    request.Model = _defaultModel;
-                }
-
-                var completeUrl = $"{_baseUrl}/chat/completions";
-                var httpRequest = new HttpRequestMessage(HttpMethod.Post, completeUrl)
-                {
-                    Content = new StringContent(
-                        JsonSerializer.Serialize(request, _jsonOptions),
-                        Encoding.UTF8,
-                        "application/json"),
-                    Headers =
-                    {
-                        Accept = { new MediaTypeWithQualityHeaderValue("application/json") }
-                    }
+                    Model = Model,
+                    Messages = new List<Message> { new Message { Role = "user", Content = "test" } }
                 };
-
-                var response = await _httpClient.SendAsync(httpRequest, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-
-                return await response.Content.ReadAsStreamAsync();
+                await ChatAsync(request);
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                _logger?.LogError(ex, "Error in ChatGLM chat stream");
-                throw;
+                throw new Exception("Failed to validate ChatGLM connection", e);
             }
         }
     }

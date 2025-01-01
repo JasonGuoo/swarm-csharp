@@ -42,36 +42,37 @@ namespace Swarm.CSharp.Tests.LLM.Providers
 
         private OpenAIClient CreateClient(HttpMessageHandler handler)
         {
-            var httpClient = new HttpClient(handler) { BaseAddress = new Uri(_baseUrl) };
-            return new OpenAIClient(_apiKey, _model, httpClient: httpClient, logger: _loggerMock.Object);
+            return new OpenAIClient(
+                apiKey: _apiKey,
+                model: _model,
+                baseUrl: _baseUrl
+            );
         }
 
         [Fact]
         public async Task ChatAsync_SuccessfulResponse_ReturnsChatResponse()
         {
             // Arrange
-            var mockResponse = new ChatResponse
-            {
-                Id = "test-id",
-                Object = "chat.completion",
-                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                Model = "gpt-4",
-                Choices = new List<ChatResponse.Choice>
+            var mockResponse = new ChatResponse(
+                id: "test-id",
+                objectName: "chat.completion",
+                created: (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                model: "gpt-4",
+                choices: new List<Choice>
                 {
-                    new()
-                    {
-                        Index = 0,
-                        Message = new Message { Role = "assistant", Content = "Test response" },
-                        FinishReason = "stop"
-                    }
+                    new Choice(
+                        index: 0,
+                        message: new Message { Role = "assistant", Content = "Test response" },
+                        finishReason: "stop"
+                    )
                 },
-                Usage = new Usage
+                usage: new Usage
                 {
                     PromptTokens = 10,
                     CompletionTokens = 20,
                     TotalTokens = 30
                 }
-            };
+            );
 
             var mockHandler = new Mock<HttpMessageHandler>();
             mockHandler.Protected()

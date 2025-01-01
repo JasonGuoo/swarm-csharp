@@ -40,29 +40,37 @@ namespace Swarm.CSharp.Tests.LLM.Providers
 
         private OllamaClient CreateClient(HttpMessageHandler handler)
         {
-            var httpClient = new HttpClient(handler);
-            return new OllamaClient(_apiKey, _model, _baseUrl, httpClient: httpClient, logger: _loggerMock.Object);
+            return new OllamaClient(
+                endpoint: _baseUrl,
+                apiKey: _apiKey,
+                model: _model
+            );
         }
 
         [Fact]
         public async Task ChatAsync_SuccessfulResponse_ReturnsChatResponse()
         {
             // Arrange
-            var mockResponse = new ChatResponse
-            {
-                Id = "test-id",
-                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                Model = "llama2",
-                Choices = new List<ChatResponse.Choice>
+            var mockResponse = new ChatResponse(
+                id: "test-id",
+                objectName: "chat.completion",
+                created: (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                model: "llama2",
+                choices: new List<Choice>
                 {
-                    new()
-                    {
-                        Index = 0,
-                        Message = new Message { Role = "assistant", Content = "Test response" },
-                        FinishReason = "stop"
-                    }
+                    new Choice(
+                        index: 0,
+                        message: new Message { Role = "assistant", Content = "Test response" },
+                        finishReason: "stop"
+                    )
+                },
+                usage: new Usage
+                {
+                    PromptTokens = 10,
+                    CompletionTokens = 20,
+                    TotalTokens = 30
                 }
-            };
+            );
 
             var mockHandler = new Mock<HttpMessageHandler>();
             mockHandler.Protected()

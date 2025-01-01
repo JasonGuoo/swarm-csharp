@@ -36,7 +36,7 @@ namespace Swarm.CSharp.Tests.LLM.Providers
             });
             var logger = loggerFactory.CreateLogger<OllamaClient>();
 
-            _client = new OllamaClient(apiKey, _model, baseUrl, logger: logger);
+            _client = new OllamaClient(apiKey, _model, baseUrl);
         }
 
         [Fact]
@@ -102,7 +102,7 @@ namespace Swarm.CSharp.Tests.LLM.Providers
                     new() { Role = "user", Content = "Say hi" }
                 },
                 Model = _model,
-                Temperature = 0.7
+                Temperature = (float?)0.7
             };
 
             _output.WriteLine("=== Test Configuration ===");

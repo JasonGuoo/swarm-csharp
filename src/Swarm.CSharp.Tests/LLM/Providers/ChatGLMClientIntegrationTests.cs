@@ -21,8 +21,6 @@ namespace Swarm.CSharp.Tests.LLM.Providers
         public ChatGLMClientIntegrationTests(ITestOutputHelper output)
         {
             _output = output;
-
-            // Load environment variables
             EnvLoader.Load();
 
             var apiKey = EnvLoader.GetEnvVar("ZHIPUAI_API_KEY");
@@ -31,15 +29,11 @@ namespace Swarm.CSharp.Tests.LLM.Providers
 
             Assert.False(string.IsNullOrEmpty(apiKey), "ZHIPUAI_API_KEY must be set in .env file");
 
-            // Create logger that writes to test output
-            var loggerFactory = LoggerFactory.Create(builder =>
-            {
-                builder.AddConsole();
-                builder.AddProvider(new XUnitLoggerProvider(_output));
-            });
-            var logger = loggerFactory.CreateLogger<ChatGLMClient>();
-
-            _client = new ChatGLMClient(apiKey, _model, baseUrl, logger: logger);
+            _client = new ChatGLMClient(
+                apiKey: apiKey,
+                model: "glm-4-flash",
+                endpoint: baseUrl
+            );
         }
 
         [Fact]
@@ -166,7 +160,7 @@ namespace Swarm.CSharp.Tests.LLM.Providers
                     new() { Role = "user", Content = "Say hi" }
                 },
                 Model = _model,
-                Temperature = 0.7,
+                Temperature = (float?)0.7,
                 MaxTokens = 150,
                 Tools = new List<Tool>()
             };

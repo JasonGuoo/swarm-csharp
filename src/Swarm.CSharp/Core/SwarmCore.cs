@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Swarm.CSharp.Function.Attributes;
 using Swarm.CSharp.LLM;
 using Swarm.CSharp.LLM.Models;
@@ -21,7 +21,7 @@ namespace Swarm.CSharp.Core
         private readonly ILLMClient _client;
         private readonly ErrorHandler _errorHandler;
         private readonly ContextManager _contextManager;
-        private readonly JsonSerializer _jsonSerializer;
+        private readonly JsonSerializerOptions _jsonSerializerOptions;
         private const string CtxVarsName = "context_variables";
         private const int DefaultMaxTurns = 10;
 
@@ -31,7 +31,7 @@ namespace Swarm.CSharp.Core
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _errorHandler = new ErrorHandler();
             _contextManager = new ContextManager(logger);
-            _jsonSerializer = JsonSerializer.CreateDefault();
+            _jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         }
 
         /// <summary>
@@ -48,12 +48,14 @@ namespace Swarm.CSharp.Core
         {
             _logger.LogInformation("Starting Swarm execution with agent: {Agent}, stream: {Stream}, maxTurns: {MaxTurns}",
                 agent.GetType().Name, stream, maxTurns);
+            _logger.LogDebug("Initial messages count: {Count}", messages?.Count ?? 0);
+            _logger.LogDebug("Context variables: {@Variables}", contextVariables);
 
             try
             {
                 IAgent activeAgent = agent;
                 var context = _contextManager.InitializeContext(contextVariables);
-                _logger.LogDebug("Initialized context with {Count} variables", context.Count);
+                _logger.LogDebug("Initialized context with {Count} variables: {@Context}", context.Count, context);
 
                 var history = new List<Message>(messages);
                 int initLen = messages.Count;
@@ -62,14 +64,15 @@ namespace Swarm.CSharp.Core
                 while (history.Count - initLen < maxTurns && activeAgent != null)
                 {
                     turn++;
-                    _logger.LogDebug("Starting turn {Turn}/{MaxTurns}", turn, maxTurns);
+                    _logger.LogDebug("Starting turn {Turn}/{MaxTurns} with agent {Agent}",
+                        turn, maxTurns, activeAgent.GetType().Name);
 
                     try
                     {
                         if (debug)
                         {
                             _logger.LogDebug("Current history before completion:");
-                            PrintHistory(history);
+                            LogHistory(history);
                         }
 
                         var completion = await GetChatCompletionAsync(
@@ -85,6 +88,7 @@ namespace Swarm.CSharp.Core
                             if (completion.Choices?.Any() == true)
                             {
                                 var responseMessage = completion.Choices[0].Message;
+                                _logger.LogDebug("Final response message: {Content}", responseMessage.Content);
                                 history.Add(responseMessage);
                             }
                             break;
@@ -95,10 +99,15 @@ namespace Swarm.CSharp.Core
                         {
                             var responseMessage = completion.Choices[0].Message;
                             history.Add(responseMessage);
+                            _logger.LogDebug("Added response with {Count} tool calls to history",
+                                responseMessage.ToolCalls?.Length ?? 0);
 
                             // Handle any tool calls
                             if (HasToolCalls(completion))
                             {
+                                _logger.LogDebug("Processing {Count} tool calls",
+                                    responseMessage.ToolCalls?.Length ?? 0);
+
                                 var results = await HandleToolCallsAsync(completion, activeAgent, history, context);
                                 var toolCalls = responseMessage.ToolCalls;
 
@@ -109,6 +118,8 @@ namespace Swarm.CSharp.Core
                                     if (result is IAgent newAgent)
                                     {
                                         activeAgent = newAgent;
+                                        _logger.LogDebug("Agent switched to: {NewAgent}",
+                                            newAgent.GetType().Name);
                                     }
 
                                     var toolCall = toolCalls[i];
@@ -119,6 +130,8 @@ namespace Swarm.CSharp.Core
                                         ToolName = toolCall.Function.Name,
                                         Content = result.ToString()
                                     };
+                                    _logger.LogDebug("Tool call result for {Tool}: {Result}",
+                                        toolCall.Function.Name, result);
                                     history.Add(callMessage);
                                 }
                             }
@@ -127,7 +140,7 @@ namespace Swarm.CSharp.Core
                         if (debug)
                         {
                             _logger.LogDebug("Updated history after processing response:");
-                            PrintHistory(history);
+                            LogHistory(history);
                         }
                     }
                     catch (Exception e)
@@ -143,6 +156,7 @@ namespace Swarm.CSharp.Core
                 }
 
                 _logger.LogInformation("Swarm execution completed successfully after {Turn} turns", turn);
+                _logger.LogDebug("Final context: {@Context}", context);
                 return new SwarmResponse
                 {
                     History = history,
@@ -157,99 +171,119 @@ namespace Swarm.CSharp.Core
             }
         }
 
-        private void PrintHistory(List<Message> history)
+        private void LogHistory(List<Message> history)
         {
             try
             {
-                var prettyJson = JsonConvert.SerializeObject(history, Formatting.Indented);
+                var options = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                };
+                var prettyJson = JsonSerializer.Serialize(history, options);
                 _logger.LogDebug("Conversation History:\n{History}", prettyJson);
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Error printing history: {Message}", e.Message);
+                _logger.LogWarning(e, "Failed to log conversation history");
             }
         }
 
-        private ChatRequest BuildRequest(IAgent agent, List<Message> history, Dictionary<string, object> context, string modelOverride)
+        private async Task<ChatRequest> BuildRequestAsync(IAgent agent, List<Message> history, Dictionary<string, object> context, string modelOverride = null)
         {
-            var instructions = agent.GetSystemPrompt(context);
-
-            // Build base request
             var request = new ChatRequest
             {
-                Model = modelOverride ?? agent.DefaultModel,
-                Messages = BuildMessages(instructions, history)
+                Model = modelOverride ?? _client.Model,
+                Messages = history,
+                Temperature = 0.7f
             };
 
-            // Handle tool choice according to the workflow
-            if (agent.ToolChoice != null)
+            var toolChoice = agent.GetToolChoice();
+            if (toolChoice != null)
             {
-                switch (agent.ToolChoice)
+                switch (toolChoice)
                 {
-                    case ToolChoice.Auto:
-                        // Use all available functions
-                        var tools = agent.Tools;
+                    case ToolChoice.Required:
+                        // Get all available functions
                         var functions = new List<FunctionSchema>();
+                        var tools = agent.GetTools();
 
-                        if (tools != null)
+                        foreach (var tool in tools)
                         {
-                            foreach (var tool in tools)
+                            try
                             {
-                                try
+                                var function = tool["function"] as Dictionary<string, object>;
+                                if (function != null)
                                 {
-                                    if (tool.TryGetValue("function", out var functionObj) && 
-                                        functionObj is Dictionary<string, object> function)
+                                    var schema = new FunctionSchema
                                     {
-                                        functions.Add(new FunctionSchema
-                                        {
-                                            Name = function["name"].ToString(),
-                                            Description = function["description"].ToString(),
-                                            Parameters = (Dictionary<string, object>)function["parameters"]
-                                        });
-                                    }
+                                        Name = function["name"]?.ToString(),
+                                        Description = function["description"]?.ToString(),
+                                        Parameters = function["parameters"] as Dictionary<string, object>
+                                    };
+                                    functions.Add(schema);
                                 }
-                                catch (Exception e)
-                                {
-                                    _logger.LogWarning(e, "Failed to convert tool to function schema: {Tool}", tool);
-                                }
+                            }
+                            catch (Exception e)
+                            {
+                                _logger?.LogWarning("Failed to convert tool to function schema: {Tool}, Error: {Error}",
+                                    JsonSerializer.Serialize(tool), e.Message);
                             }
                         }
 
-                        if (functions.Any())
+                        if (!functions.Any())
                         {
-                            request.Functions = functions;
-                            request.FunctionCall = "auto";
+                            throw new SwarmException("Tool choice is required but no tools are available");
                         }
+
+                        request.Functions = functions;
+                        request.FunctionCall = "auto";
                         break;
 
                     case ToolChoice.None:
-                        // Explicitly disable function calling
+                        // No functions needed
                         request.FunctionCall = "none";
+                        break;
+
+                    case ToolChoice.Auto:
+                    default:
+                        // Add functions but don't require their use
+                        var autoFunctions = new List<FunctionSchema>();
+                        var autoTools = agent.GetTools();
+
+                        foreach (var tool in autoTools)
+                        {
+                            try
+                            {
+                                var function = tool["function"] as Dictionary<string, object>;
+                                if (function != null)
+                                {
+                                    var schema = new FunctionSchema
+                                    {
+                                        Name = function["name"]?.ToString(),
+                                        Description = function["description"]?.ToString(),
+                                        Parameters = function["parameters"] as Dictionary<string, object>
+                                    };
+                                    autoFunctions.Add(schema);
+                                }
+                            }
+                            catch (Exception e)
+                            {
+                                _logger?.LogWarning("Failed to convert tool to function schema: {Tool}, Error: {Error}",
+                                    JsonSerializer.Serialize(tool), e.Message);
+                            }
+                        }
+
+                        if (autoFunctions.Any())
+                        {
+                            request.Functions = autoFunctions;
+                            request.FunctionCall = "auto";
+                        }
                         break;
                 }
             }
 
             return request;
-        }
-
-        private List<Message> BuildMessages(string instructions, List<Message> history)
-        {
-            var messages = new List<Message>
-            {
-                new Message
-                {
-                    Role = "system",
-                    Content = instructions
-                }
-            };
-
-            messages.AddRange(history);
-            return messages;
-        }
-
-        private bool HasToolCalls(ChatResponse response)
-        {
-            return response.Choices?.FirstOrDefault()?.Message?.ToolCalls?.Any() == true;
         }
 
         private async Task<List<object>> HandleToolCallsAsync(
@@ -261,7 +295,7 @@ namespace Swarm.CSharp.Core
             var message = response.Choices[0].Message;
             var toolCalls = message.ToolCalls;
 
-            _logger.LogDebug("Processing {Count} tool calls", toolCalls.Length);
+            _logger.LogDebug("Processing {Count} tool calls", toolCalls?.Length ?? 0);
             var results = new List<object>();
 
             foreach (var toolCall in toolCalls)
@@ -269,75 +303,75 @@ namespace Swarm.CSharp.Core
                 try
                 {
                     var functionName = toolCall.Function.Name;
-                    _logger.LogDebug("Executing tool call: {Function}", functionName);
+                    _logger.LogDebug("Executing tool call: {Function} with arguments: {Arguments}",
+                        functionName, toolCall.Function.Arguments);
 
                     // Get function spec and validate
                     var functionSpec = agent.GetFunctionSpec(functionName);
                     if (functionSpec == null)
                     {
-                        throw new SwarmException($"Function not found: {functionName}");
+                        _logger.LogError("Function {Function} not found", functionName);
+                        throw new SwarmException($"Function {functionName} not found");
                     }
 
                     // Parse arguments
-                    var arguments = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                        toolCall.Function.Arguments);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                    };
+
+                    var arguments = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolCall.Function.Arguments, options);
 
                     // Get method and parameters
                     var method = agent.FindFunction(functionName);
-                    var methodParams = method.GetParameters();
-                    if (methodParams == null || !methodParams.Any())
+                    var parameters = method.GetParameters();
+
+                    // Convert arguments to parameter types
+                    var parameterValues = new object[parameters.Length];
+                    for (int i = 0; i < parameters.Length; i++)
                     {
-                        throw new SwarmException($"No parameters defined for function: {functionName}");
+                        var parameter = parameters[i];
+                        if (!arguments.TryGetValue(parameter.Name, out var argValue))
+                        {
+                            if (parameter.HasDefaultValue)
+                            {
+                                parameterValues[i] = parameter.DefaultValue;
+                                continue;
+                            }
+                            throw new SwarmException($"Missing required argument {parameter.Name} for function {functionName}");
+                        }
+
+                        try
+                        {
+                            parameterValues[i] = JsonSerializer.Deserialize(
+                                argValue.GetRawText(),
+                                parameter.ParameterType,
+                                options);
+                        }
+                        catch (Exception e)
+                        {
+                            throw new SwarmException(
+                                $"Failed to convert argument {parameter.Name} to type {parameter.ParameterType.Name}: {e.Message}");
+                        }
                     }
 
-                    // Prepare arguments with default values
-                    var args = new object[methodParams.Length];
-                    for (int i = 0; i < methodParams.Length; i++)
+                    // Invoke function
+                    object result;
+                    try
                     {
-                        var methodParam = methodParams[i];
-                        var paramAttribute = methodParam.GetCustomAttribute<ParameterAttribute>();
-
-                        // Check specifically for 'context' parameter
-                        if (methodParam.Name == "context" &&
-                            methodParam.ParameterType == typeof(Dictionary<string, object>))
+                        result = method.Invoke(agent, parameterValues);
+                        if (result is Task task)
                         {
-                            args[i] = context;
-                            continue;
-                        }
-
-                        if (paramAttribute == null)
-                        {
-                            // Skip parameters without ParameterAttribute
-                            continue;
-                        }
-
-                        var paramName = methodParam.Name;
-                        arguments.TryGetValue(paramName, out var value);
-
-                        if (value == null && !string.IsNullOrEmpty(paramAttribute.DefaultValue))
-                        {
-                            // Use default value if provided
-                            value = ConvertArgument(paramAttribute.DefaultValue, methodParam.ParameterType);
-                        }
-                        else if (value == null)
-                        {
-                            throw new SwarmException($"Required parameter missing: {paramName}");
-                        }
-
-                        args[i] = ConvertArgument(value, methodParam.ParameterType);
-                    }
-
-                    // Invoke the function and store result
-                    var result = method.Invoke(agent, args);
-                    if (result is Task task)
-                    {
-                        await task.ConfigureAwait(false);
-                        if (task.GetType().IsGenericType)
-                        {
-                            var resultProperty = task.GetType().GetProperty("Result");
-                            result = resultProperty?.GetValue(task);
+                            await task;
+                            result = ((dynamic)task).Result;
                         }
                     }
+                    catch (Exception e)
+                    {
+                        throw new SwarmException($"Function {functionName} execution failed: {e.Message}", e);
+                    }
+
                     results.Add(result);
                 }
                 catch (Exception e)
@@ -351,39 +385,6 @@ namespace Swarm.CSharp.Core
             return results;
         }
 
-        private object ConvertArgument(object value, Type targetType)
-        {
-            if (value == null)
-                return null;
-
-            try
-            {
-                if (targetType == typeof(string))
-                {
-                    return value.ToString();
-                }
-                else if (targetType == typeof(int))
-                {
-                    return Convert.ToInt32(value);
-                }
-                else if (targetType == typeof(double))
-                {
-                    return Convert.ToDouble(value);
-                }
-                else if (targetType == typeof(bool))
-                {
-                    return Convert.ToBoolean(value);
-                }
-
-                // For complex types, use JSON.NET's conversion
-                return JsonConvert.DeserializeObject(JsonConvert.SerializeObject(value), targetType);
-            }
-            catch (Exception e)
-            {
-                throw new SwarmException($"Failed to convert argument to type {targetType.Name}", e);
-            }
-        }
-
         private async Task<ChatResponse> GetChatCompletionAsync(
             IAgent agent,
             List<Message> history,
@@ -395,12 +396,12 @@ namespace Swarm.CSharp.Core
             _logger.LogDebug("Getting chat completion from LLM");
             try
             {
-                var request = BuildRequest(agent, history, context, modelOverride);
+                var request = await BuildRequestAsync(agent, history, context, modelOverride);
 
                 if (debug)
                 {
                     _logger.LogDebug("Request to LLM: {Request}",
-                        JsonConvert.SerializeObject(request, Formatting.Indented));
+                        JsonSerializer.Serialize(request, _jsonSerializerOptions));
                 }
 
                 var response = await _client.ChatAsync(request);
@@ -408,7 +409,7 @@ namespace Swarm.CSharp.Core
                 if (debug)
                 {
                     _logger.LogDebug("Response from LLM: {Response}",
-                        JsonConvert.SerializeObject(response, Formatting.Indented));
+                        JsonSerializer.Serialize(response, _jsonSerializerOptions));
                 }
 
                 return response;
@@ -427,17 +428,32 @@ namespace Swarm.CSharp.Core
                 throw new SwarmException("Received null ChatResponse");
             }
 
-            if (completion.Error != null)
+            var error = completion.GetFieldValue<Dictionary<string, object>>("error");
+            if (error != null && error.Count > 0)
             {
-                var error = completion.Error;
-                _logger.LogError("LLM error from {Provider}: {Message} (code: {Code})\nRaw error: {Raw}",
-                    error.Metadata?.ProviderName ?? "Unknown",
-                    error.Message,
-                    error.Code,
-                    error.Metadata?.Raw ?? string.Empty);
+                string errorMessage = error.TryGetValue("message", out var message) ? message?.ToString() : "Unknown error";
+                int errorCode = error.TryGetValue("code", out var code) && code != null ? Convert.ToInt32(code) : 0;
 
-                throw new SwarmException($"LLM error: {error.Message} (provider: {error.Metadata?.ProviderName ?? "Unknown"})");
+                if (error.TryGetValue("metadata", out var metadataObj) && metadataObj is Dictionary<string, object> metadata)
+                {
+                    string rawError = metadata.TryGetValue("raw", out var raw) ? raw?.ToString() : "";
+                    string provider = metadata.TryGetValue("provider_name", out var providerName) ? providerName?.ToString() : "";
+                    throw new SwarmException($"{errorMessage} (Code: {errorCode}, Provider: {provider}, Raw: {rawError})");
+                }
+
+                throw new SwarmException($"{errorMessage} (Code: {errorCode})");
             }
+        }
+
+        private bool HasToolCalls(ChatResponse response)
+        {
+            if (response?.Choices == null || response.Choices.Count == 0)
+            {
+                return false;
+            }
+
+            var message = response.Choices[0].Message;
+            return message?.ToolCalls != null && message.ToolCalls.Length > 0;
         }
 
         private class ContextManager

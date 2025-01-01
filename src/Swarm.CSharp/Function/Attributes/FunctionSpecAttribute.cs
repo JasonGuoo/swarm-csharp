@@ -12,7 +12,11 @@ namespace Swarm.CSharp.Function.Attributes
         /// <summary>
         /// Description of what the function does.
         /// </summary>
-        public string Description { get; }
+        public string Description { get; set; }
+
+        public FunctionSpecAttribute()
+        {
+        }
 
         public FunctionSpecAttribute(string description)
         {

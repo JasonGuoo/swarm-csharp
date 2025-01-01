@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using Swarm.CSharp.Utils;
 
 namespace Swarm.CSharp.Tests.Helpers
 {
@@ -10,21 +11,21 @@ namespace Swarm.CSharp.Tests.Helpers
             var currentDirectory = Directory.GetCurrentDirectory();
             var fullPath = Path.GetFullPath(filePath);
 
-            Console.WriteLine($"Current Directory: {currentDirectory}");
-            Console.WriteLine($"Trying to load .env from: {fullPath}");
+            Logger.LogDebug($"Current Directory: {currentDirectory}");
+            Logger.LogDebug($"Trying to load .env from: {fullPath}");
 
             if (!File.Exists(filePath))
             {
-                Console.WriteLine($"Warning: {filePath} not found, using default values");
+                Logger.LogWarning($"Warning: {filePath} not found, using default values");
                 // Try to load from solution root
                 var solutionRoot = Path.GetFullPath(Path.Combine(currentDirectory, "../../../../../"));
                 var solutionEnvPath = Path.Combine(solutionRoot, filePath);
-                Console.WriteLine($"Trying solution root: {solutionEnvPath}");
+                Logger.LogDebug($"Trying solution root: {solutionEnvPath}");
 
                 if (File.Exists(solutionEnvPath))
                 {
                     filePath = solutionEnvPath;
-                    Console.WriteLine($"Found .env in solution root: {filePath}");
+                    Logger.LogInformation($"Found .env in solution root: {filePath}");
                 }
                 else
                 {
