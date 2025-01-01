@@ -60,24 +60,23 @@ The project now has its core functionality ready and stable:
 
 1. **Dynamic Function Calling**: Automatically calls attributed functions based on LLM responses
 2. **Agent Switching**: Seamlessly switches between agents based on LLM decisions
-3. **LLM Support**: Integrates with multiple LLM providers:
+3. **LLM Support**: Currently implements:
    - OpenAI
    - Azure OpenAI
-   - ChatGLM
-   - Ollama
+   > **Note**: ChatGLM and Ollama integrations are planned but not yet implemented
 4. **Verified Implementation**: Core functionality has been tested and verified with OpenAI API
 
-The framework is now ready for building multi-agent applications while we continue to add more features and improvements.
+The framework is now ready for building basic multi-agent applications while we continue to add more features and improvements.
 
 ## Requirements
 
-- .NET 7.0 or later
+- .NET 8.0 or later
 - Visual Studio 2022 or JetBrains Rider
 - NuGet Package Manager
 
 ## Quick Start
 
-For a complete example of how to use SwarmCSharp, check out our [Weather Agent Example](examples/weather/README.md) which demonstrates:
+For a complete example of how to use SwarmCSharp, check out our [Weather Agent Example](examples/WeatherExample/README.md) which demonstrates:
 - Agent definition with system prompts
 - Function attributes and parameter validation
 - Dynamic agent hand-offs
@@ -93,9 +92,11 @@ The Weather Agent demonstrates how to create a simple agent that interacts with 
 - External API integration
 - Function attributes and parameters
 
-See [Weather Example](examples/weather/README.md) for details.
+See [Weather Example](examples/WeatherExample/README.md) for details.
 
 ### Triage Agent Example
+
+> **Note**: This example is planned but not yet implemented.
 
 The Triage Agent demonstrates how to implement a multi-agent system for customer service routing. It shows:
 - Multi-agent coordination
@@ -124,13 +125,12 @@ export OPENAI_BASE_URL='https://custom-url/v1/'  # Optional
 ```
 
 2. **Configuration File**:
-Create a `appsettings.json` file:
 ```json
 {
   "OpenAI": {
     "ApiKey": "your-api-key",
-    "OrganizationId": "your-org-id",  // Optional
-    "BaseUrl": "https://custom-url/v1/"  // Optional
+    "OrganizationId": "your-org-id",  # Optional
+    "BaseUrl": "https://custom-url/v1/"  # Optional
   }
 }
 ```
@@ -139,9 +139,9 @@ Create a `appsettings.json` file:
 ```csharp
 var client = new OpenAIClient(
     apiKey: "your-api-key",
-    organization: "your-org-id",  // Optional
-    model: "gpt-4",  // Optional, defaults to gpt-4
-    temperature: 0.7f  // Optional, defaults to 0.7
+    organization: "your-org-id",  # Optional
+    model: "gpt-4",  # Optional, defaults to gpt-4
+    temperature: 0.7f  # Optional, defaults to 0.7
 );
 ```
 
@@ -163,7 +163,7 @@ export AZURE_OPENAI_DEPLOYMENT_ID='your-deployment-name'
     "ApiKey": "your-api-key",
     "Endpoint": "https://your-resource.openai.azure.com",
     "DeploymentId": "your-deployment-name",
-    "ApiVersion": "2023-12-01-preview"  // Optional
+    "ApiVersion": "2023-12-01-preview"  # Optional
   }
 }
 ```
@@ -174,9 +174,9 @@ var client = new AzureOpenAIClient(
     endpoint: "https://your-resource.openai.azure.com",
     apiKey: "your-api-key",
     deploymentId: "your-deployment-name",
-    apiVersion: "2023-12-01-preview",  // Optional
-    model: "gpt-4",  // Optional
-    temperature: 0.7f  // Optional
+    apiVersion: "2023-12-01-preview",  # Optional
+    model: "gpt-4",  # Optional
+    temperature: 0.7f  # Optional
 );
 ```
 
@@ -195,7 +195,7 @@ export CHATGLM_BASE_URL='https://open.bigmodel.cn/api/paas/v4'  # Optional
 {
   "ChatGLM": {
     "ApiKey": "your-api-key",
-    "BaseUrl": "https://open.bigmodel.cn/api/paas/v4"  // Optional
+    "BaseUrl": "https://open.bigmodel.cn/api/paas/v4"  # Optional
   }
 }
 ```
@@ -204,8 +204,8 @@ export CHATGLM_BASE_URL='https://open.bigmodel.cn/api/paas/v4'  # Optional
 ```csharp
 var client = new ChatGLMClient(
     apiKey: "your-api-key",
-    model: "glm-4-flash",  // Optional
-    temperature: 0.7f  // Optional
+    model: "glm-4-flash",  # Optional
+    temperature: 0.7f  # Optional
 );
 ```
 
@@ -222,7 +222,7 @@ export OLLAMA_BASE_URL='http://localhost:11434/api'  # Optional
 ```json
 {
   "Ollama": {
-    "BaseUrl": "http://localhost:11434/api"  // Optional
+    "BaseUrl": "http://localhost:11434/api"  # Optional
   }
 }
 ```
@@ -230,15 +230,15 @@ export OLLAMA_BASE_URL='http://localhost:11434/api'  # Optional
 3. **Direct Initialization**:
 ```csharp
 var client = new OllamaClient(
-    model: "llama2",  // Optional
-    temperature: 0.7f  // Optional
+    model: "llama2",  # Optional
+    temperature: 0.7f  # Optional
 );
 ```
 
 ## Building from Source
 
 ```bash
-# Requires .NET 7.0 SDK
+# Requires .NET 8.0 SDK
 git clone https://github.com/JasonGuoo/swarm-csharp.git
 cd swarm-csharp
 dotnet build
