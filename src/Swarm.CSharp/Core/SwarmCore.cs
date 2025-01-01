@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using Swarm.CSharp.Function;
 using Swarm.CSharp.Function.Attributes;
 using Swarm.CSharp.LLM;
 using Swarm.CSharp.LLM.Models;
@@ -24,6 +25,7 @@ namespace Swarm.CSharp.Core
         private readonly JsonSerializerOptions _jsonSerializerOptions;
         private const string CtxVarsName = "context_variables";
         private const int DefaultMaxTurns = 10;
+        private readonly FunctionInvoker _functionInvoker;
 
         public SwarmCore(ILLMClient client, ILogger<SwarmCore> logger)
         {
@@ -32,6 +34,7 @@ namespace Swarm.CSharp.Core
             _errorHandler = new ErrorHandler();
             _contextManager = new ContextManager(logger);
             _jsonSerializerOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            _functionInvoker = new FunctionInvoker();
         }
 
         /// <summary>
@@ -306,65 +309,41 @@ namespace Swarm.CSharp.Core
                     _logger.LogDebug("Executing tool call: {Function} with arguments: {Arguments}",
                         functionName, toolCall.Function.Arguments);
 
-                    // Get function spec and validate
-                    var functionSpec = agent.GetFunctionSpec(functionName);
-                    if (functionSpec == null)
+                    // Parse arguments
+                    var arguments = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                        toolCall.Function.Arguments,
+                        _jsonSerializerOptions);
+
+                    // Add context to arguments
+                    var allArguments = new Dictionary<string, object>(
+                        arguments.ToDictionary(
+                            kvp => kvp.Key,
+                            kvp => (object)JsonSerializer.Deserialize(
+                                kvp.Value.GetRawText(),
+                                typeof(object),
+                                _jsonSerializerOptions)
+                        )
+                    );
+                    allArguments["context"] = context;
+
+                    // Get method
+                    var method = agent.FindFunction(functionName);
+                    if (method == null)
                     {
-                        _logger.LogError("Function {Function} not found", functionName);
                         throw new SwarmException($"Function {functionName} not found");
                     }
 
-                    // Parse arguments
-                    var options = new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                    };
-
-                    var arguments = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(toolCall.Function.Arguments, options);
-
-                    // Get method and parameters
-                    var method = agent.FindFunction(functionName);
-                    var parameters = method.GetParameters();
-
-                    // Convert arguments to parameter types
-                    var parameterValues = new object[parameters.Length];
-                    for (int i = 0; i < parameters.Length; i++)
-                    {
-                        var parameter = parameters[i];
-                        if (!arguments.TryGetValue(parameter.Name, out var argValue))
-                        {
-                            if (parameter.HasDefaultValue)
-                            {
-                                parameterValues[i] = parameter.DefaultValue;
-                                continue;
-                            }
-                            throw new SwarmException($"Missing required argument {parameter.Name} for function {functionName}");
-                        }
-
-                        try
-                        {
-                            parameterValues[i] = JsonSerializer.Deserialize(
-                                argValue.GetRawText(),
-                                parameter.ParameterType,
-                                options);
-                        }
-                        catch (Exception e)
-                        {
-                            throw new SwarmException(
-                                $"Failed to convert argument {parameter.Name} to type {parameter.ParameterType.Name}: {e.Message}");
-                        }
-                    }
-
-                    // Invoke function
+                    // Invoke function using FunctionInvoker
                     object result;
                     try
                     {
-                        result = method.Invoke(agent, parameterValues);
-                        if (result is Task task)
+                        if (method.ReturnType.IsGenericType && method.ReturnType.GetGenericTypeDefinition() == typeof(Task<>))
                         {
-                            await task;
-                            result = ((dynamic)task).Result;
+                            result = await _functionInvoker.InvokeAsync(method, agent, allArguments);
+                        }
+                        else
+                        {
+                            result = _functionInvoker.Invoke(method, agent, allArguments);
                         }
                     }
                     catch (Exception e)

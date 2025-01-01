@@ -42,17 +42,17 @@ namespace Swarm.CSharp.Function
             try
             {
                 var result = method.Invoke(target, args);
-                
+
                 // Handle async methods
                 if (result is Task task)
                 {
                     task.GetAwaiter().GetResult();
-                    
+
                     // If it's a Task<T>, return the result
                     var resultProperty = task.GetType().GetProperty("Result");
                     return resultProperty?.GetValue(task);
                 }
-                
+
                 return result;
             }
             catch (TargetInvocationException e)
@@ -84,17 +84,17 @@ namespace Swarm.CSharp.Function
             try
             {
                 var result = method.Invoke(target, args);
-                
+
                 // Handle async methods
                 if (result is Task task)
                 {
                     await task.ConfigureAwait(false);
-                    
+
                     // If it's a Task<T>, return the result
                     var resultProperty = task.GetType().GetProperty("Result");
                     return resultProperty?.GetValue(task);
                 }
-                
+
                 return result;
             }
             catch (TargetInvocationException e)
@@ -116,7 +116,15 @@ namespace Swarm.CSharp.Function
             {
                 var param = methodParams[i];
                 var annotation = param.GetCustomAttribute<ParameterAttribute>();
-                
+
+                // Special handling for context parameter
+                if (param.Name == "context" &&
+                    param.ParameterType == typeof(Dictionary<string, object>))
+                {
+                    args[i] = parameters["context"];
+                    continue;
+                }
+
                 var paramName = param.Name;
                 var paramType = param.ParameterType;
                 parameters.TryGetValue(paramName, out var rawValue);
@@ -132,6 +140,11 @@ namespace Swarm.CSharp.Function
                     {
                         // Allow null for reference types unless explicitly marked as required
                         args[i] = null;
+                        continue;
+                    }
+                    else if (annotation == null)
+                    {
+                        // Skip parameters without Parameter attribute
                         continue;
                     }
                     else
