@@ -159,10 +159,6 @@ namespace Swarm.CSharp.Tests.LLM.Providers
                 {
                     new() { Role = "user", Content = "Say hi" }
                 },
-                Model = _model,
-                Temperature = (float?)0.7,
-                MaxTokens = 150,
-                Tools = new List<Tool>()
             };
 
             _output.WriteLine("=== Test Configuration ===");

@@ -5,7 +5,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using Swarm.CSharp.LLM.Helpers;
 using Swarm.CSharp.LLM.Models;
 using Swarm.CSharp.Utils;
 
@@ -32,12 +31,16 @@ public class OpenAIClient : ILLMClient
     {
         try
         {
+            
+
             // Set default values if not specified
             request.Model ??= Model;
             request.Stream ??= false;
             request.Temperature ??= 0.7f;
             request.MaxTokens ??= 8192;
-
+            
+            request.Validate();
+            
             var json = JsonSerializer.Serialize(request);
             Logger.LogDebug($"OpenAI Request: {json}");
 

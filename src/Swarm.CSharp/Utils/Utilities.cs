@@ -1,6 +1,6 @@
 using System;
 
-namespace Swarm.CSharp.LLM.Helpers
+namespace Swarm.CSharp.Utils
 {
     public static class Utilities
     {

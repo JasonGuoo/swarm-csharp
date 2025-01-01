@@ -31,11 +31,23 @@ namespace Swarm.CSharp.LLM.Providers
         {
             try
             {
+                
+
+                // Set default values if not specified
+                request.Model ??= Model;
+                request.Stream ??= false;
+                request.Temperature ??= 0.7;
+                request.MaxTokens ??= 8192;
+                
+                request.Validate();
+
                 var json = JsonSerializer.Serialize(request);
                 Logger.LogDebug($"ChatGLM Request: {json}");
 
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PostAsync("/chat", content);
+                var fullUrl = Utilities.CombineUrls(_httpClient.BaseAddress.ToString(), "chat/completions");
+                Logger.LogDebug($"Full URL: {fullUrl}");
+                var response = await _httpClient.PostAsync(fullUrl, content);
                 response.EnsureSuccessStatusCode();
 
                 var responseContent = await response.Content.ReadAsStringAsync();

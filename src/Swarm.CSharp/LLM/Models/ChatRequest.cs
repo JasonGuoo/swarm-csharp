@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
@@ -12,22 +13,22 @@ namespace Swarm.CSharp.LLM.Models
         public List<Message> Messages { get; set; }
 
         [JsonPropertyName("temperature")]
-        public double? Temperature { get; set; }
+        public double? Temperature { get; set; } = 0.7;
 
         [JsonPropertyName("top_p")]
-        public double? TopP { get; set; }
+        public double? TopP { get; set; } = 1.0;
 
         [JsonPropertyName("n")]
-        public int? N { get; set; }
+        public int? N { get; set; } = 1;
 
         [JsonPropertyName("stream")]
-        public bool? Stream { get; set; }
+        public bool? Stream { get; set; } = false;
 
         [JsonPropertyName("stop")]
         public List<string> Stop { get; set; }
 
         [JsonPropertyName("max_tokens")]
-        public int? MaxTokens { get; set; }
+        public int? MaxTokens { get; set; } = 8192;
 
         [JsonPropertyName("presence_penalty")]
         public double? PresencePenalty { get; set; }
@@ -71,8 +72,32 @@ namespace Swarm.CSharp.LLM.Models
 
         public ChatRequest(string model, List<Message> messages) : this()
         {
+            if (string.IsNullOrEmpty(model))
+            {
+                throw new ArgumentNullException(nameof(model), "Model cannot be null or empty");
+            }
             Model = model;
-            Messages = messages ?? new List<Message>();
+            Messages = messages ?? throw new ArgumentNullException(nameof(messages), "Messages cannot be null");
+        }
+
+        public void Validate()
+        {
+            if (string.IsNullOrEmpty(Model))
+            {
+                throw new ArgumentNullException(nameof(Model), "Model must be specified");
+            }
+
+            if (Messages == null || Messages.Count == 0)
+            {
+                throw new ArgumentException("Messages cannot be null or empty", nameof(Messages));
+            }
+
+            // Validate temperature range
+            if (Temperature.HasValue && (Temperature < 0 || Temperature > 2))
+            {
+                throw new ArgumentOutOfRangeException(nameof(Temperature), "Temperature must be between 0 and 2");
+            }
+
         }
 
         private object ConvertFunctionCallToToolChoice(object functionCall)
@@ -100,6 +125,10 @@ namespace Swarm.CSharp.LLM.Models
 
         public static Tool FromFunctionSchema(FunctionSchema schema)
         {
+            if (schema == null)
+            {
+                throw new ArgumentNullException(nameof(schema));
+            }
             return new Tool { Function = schema };
         }
     }
