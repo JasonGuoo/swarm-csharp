@@ -38,8 +38,16 @@ namespace Swarm.CSharp.Core
         }
 
         /// <summary>
-        /// Run agent with messages and context
+        /// Core execution method that orchestrates the interaction between agents, LLM, and function calls.
         /// </summary>
+        /// <param name="agent">The initial agent to handle the conversation</param>
+        /// <param name="messages">List of previous conversation messages</param>
+        /// <param name="contextVariables">Variables to maintain state across turns</param>
+        /// <param name="modelOverride">Optional override for the LLM model</param>
+        /// <param name="stream">Whether to stream responses (not implemented)</param>
+        /// <param name="debug">Enable detailed debug logging</param>
+        /// <param name="maxTurns">Maximum conversation turns before forced completion</param>
+        /// <returns>SwarmResponse containing conversation history, final agent, and context</returns>
         public async Task<SwarmResponse> RunAsync(
             IAgent agent,
             List<Message> messages,
